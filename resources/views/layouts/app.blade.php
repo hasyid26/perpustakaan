@@ -76,6 +76,7 @@
                                 <span class="ml-3">Data Peminjaman</span>
                             </a>
                         </li>
+                        @if(auth()->user()->isAdministrator() || auth()->user()->isPetugas())
                         <li>
                             <a href="{{ route('laporan.index') }}" class="flex items-center p-2 rounded-lg hover:bg-gray-100 {{ request()->routeIs('laporan.*') ? 'bg-blue-50 text-blue-600' : 'text-gray-900' }}">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,6 +85,7 @@
                                 <span class="ml-3">Laporan</span>
                             </a>
                         </li>
+                        @endif
                     @endif
 
                     @if(auth()->user()->isAdministrator())

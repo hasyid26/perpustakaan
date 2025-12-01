@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\BukuController;
@@ -50,8 +51,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('peminjaman/{peminjaman}/reject-pengembalian', [PeminjamanController::class, 'rejectPengembalian'])
             ->name('peminjaman.reject-pengembalian');
 
-        // Laporan
+        /* ========================
+           ROUTES LAPORAN
+           HANYA ADMIN & PETUGAS
+        ========================= */
+        // List semua laporan
         Route::get('laporan', [LaporanController::class, 'index'])->name('laporan.index');
+        Route::get('laporan/export-pdf', [LaporanController::class, 'exportPdf'])->name('laporan.export-pdf');
+
+        // Detail laporan per peminjaman
+        Route::get('laporan/{peminjaman}', [LaporanController::class, 'show'])->name('laporan.show');
+
+        // Filter / Laporan spesifik
         Route::post('laporan/peminjaman', [LaporanController::class, 'peminjaman'])->name('laporan.peminjaman');
         Route::get('laporan/buku', [LaporanController::class, 'buku'])->name('laporan.buku');
         Route::get('laporan/anggota', [LaporanController::class, 'anggota'])->name('laporan.anggota');
@@ -79,9 +90,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('peminjaman-user/{peminjaman}', [PeminjamanUserController::class, 'show'])->name('peminjaman-user.show');
 
         // Request & Cancel Pengembalian
-        Route::post('peminjaman-user/{peminjaman}/request-pengembalian', [PeminjamanUserController::class, 'requestPengembalian'])->name('peminjaman-user.request');
-
-Route::post('peminjaman-user/{peminjaman}/cancel-request', [PeminjamanUserController::class, 'cancelRequest'])->name('peminjaman-user.cancel-request');
-
+        Route::post('peminjaman-user/{peminjaman}/request-pengembalian', [PeminjamanUserController::class, 'requestPengembalian'])
+            ->name('peminjaman-user.request');
+        Route::post('peminjaman-user/{peminjaman}/cancel-request', [PeminjamanUserController::class, 'cancelRequest'])
+            ->name('peminjaman-user.cancel-request');
     });
 });

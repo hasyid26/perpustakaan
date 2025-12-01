@@ -1,69 +1,126 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Peminjaman;
-use App\Models\Buku;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 
 class LaporanController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('laporan.index');
-    }
+        $query = Peminjaman::with(['user', 'buku', 'petugasPinjam', 'petugasKembali']);
 
-    public function peminjaman(Request $request)
-    {
-        $validated = $request->validate([
-            'tanggal_mulai' => 'required|date',
-            'tanggal_akhir' => 'required|date|after_or_equal:tanggal_mulai',
-            'status' => 'nullable|in:dipinjam,dikembalikan,terlambat'
-        ]);
-
-        $query = Peminjaman::with(['user', 'buku'])
-            ->whereBetween('tanggal_peminjaman', [
-                $validated['tanggal_mulai'], 
-                $validated['tanggal_akhir']
+        if ($request->filled('tanggal_peminjaman_awal') && $request->filled('tanggal_peminjaman_akhir')) {
+            $query->whereBetween('tanggal_peminjaman', [
+                $request->tanggal_peminjaman_awal,
+                $request->tanggal_peminjaman_akhir
             ]);
-
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
         }
 
-        $peminjaman = $query->get();
+        if ($request->filled('tanggal_kembali_awal') && $request->filled('tanggal_kembali_akhir')) {
+            $query->whereBetween('tanggal_pengembalian_aktual', [
+                $request->tanggal_kembali_awal,
+                $request->tanggal_kembali_akhir
+            ]);
+        }
 
-        $pdf = Pdf::loadView('laporan.peminjaman', [
-            'peminjaman' => $peminjaman,
-            'tanggal_mulai' => $validated['tanggal_mulai'],
-            'tanggal_akhir' => $validated['tanggal_akhir']
-        ]);
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
 
-        return $pdf->download('laporan-peminjaman-' . now()->format('Y-m-d') . '.pdf');
+        if ($request->filled('user')) {
+            $query->whereHas('user', fn($q) => $q->where('name', 'like', '%' . $request->user . '%'));
+        }
+
+        if ($request->filled('buku')) {
+            $query->whereHas('buku', fn($q) => $q->where('judul', 'like', '%' . $request->buku . '%'));
+        }
+
+        if ($request->filled('petugas')) {
+            $query->where(fn($q) => 
+                $q->whereHas('petugasPinjam', fn($x) => $x->where('name', 'like', '%' . $request->petugas . '%'))
+                  ->orWhereHas('petugasKembali', fn($x) => $x->where('name', 'like', '%' . $request->petugas . '%')));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(fn($q) => 
+                $q->where('kode_peminjaman', 'like', "%$search%")
+                  ->orWhereHas('user', fn($x) => $x->where('name', 'like', "%$search%"))
+                  ->orWhereHas('buku', fn($x) => $x->where('judul', 'like', "%$search%")));
+            
+        }
+
+        $laporan = $query->latest('tanggal_peminjaman')->paginate(15)->withQueryString();
+        return view('laporan.index', compact('laporan'));
     }
 
-    public function buku()
+    public function show(Peminjaman $laporan)
     {
-        $bukus = Buku::with('kategori')->get();
-
-        $pdf = Pdf::loadView('laporan.buku', [
-            'bukus' => $bukus
-        ]);
-
-        return $pdf->download('laporan-buku-' . now()->format('Y-m-d') . '.pdf');
+        $laporan->load(['user', 'buku.kategori', 'petugasPinjam', 'petugasKembali']);
+        return view('laporan.show', compact('laporan'));
     }
 
-    public function anggota()
+    public function exportPdf(Request $request)
     {
-        $users = User::where('role', 'peminjam')
-            ->withCount(['peminjaman'])
-            ->get();
+        $query = Peminjaman::with(['user', 'buku', 'petugasPinjam', 'petugasKembali']);
 
-        $pdf = Pdf::loadView('laporan.anggota', [
-            'users' => $users
-        ]);
+        if ($request->filled('tanggal_peminjaman_awal') && $request->filled('tanggal_peminjaman_akhir')) {
+            $query->whereBetween('tanggal_peminjaman', [
+                $request->tanggal_peminjaman_awal,
+                $request->tanggal_peminjaman_akhir
+            ]);
+        }
 
-        return $pdf->download('laporan-anggota-' . now()->format('Y-m-d') . '.pdf');
+        if ($request->filled('tanggal_kembali_awal') && $request->filled('tanggal_kembali_akhir')) {
+            $query->whereBetween('tanggal_pengembalian_aktual', [
+                $request->tanggal_kembali_awal,
+                $request->tanggal_kembali_akhir
+            ]);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('user')) {
+            $query->whereHas('user', fn($q) => $q->where('name', 'like', '%' . $request->user . '%'));
+        }
+
+        if ($request->filled('buku')) {
+            $query->whereHas('buku', fn($q) => $q->where('judul', 'like', '%' . $request->buku . '%'));
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(fn($q) => 
+                $q->where('kode_peminjaman', 'like', "%$search%")
+                  ->orWhereHas('user', fn($x) => $x->where('name', 'like', "%$search%"))
+                  ->orWhereHas('buku', fn($x) => $x->where('judul', 'like', "%$search%")));
+        }
+
+        $laporan = $query->latest('tanggal_peminjaman')->get();
+
+        // Set timezone ke Asia/Jakarta (WIB)
+        $tanggalSekarang = Carbon::now('Asia/Jakarta');
+
+        $data = [
+            'laporan' => $laporan,
+            // Tanggal cetak dengan zona waktu Indonesia (WIB)
+            'tanggal_cetak' => $tanggalSekarang->format('d/m/Y H:i:s'),
+            'filters' => [
+                'tanggal_awal' => $request->tanggal_peminjaman_awal,
+                'tanggal_akhir' => $request->tanggal_peminjaman_akhir,
+                'status' => $request->status,
+            ]
+        ];
+
+        $pdf = Pdf::loadView('laporan.pdf', $data)
+                  ->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-peminjaman-' . $tanggalSekarang->format('Y-m-d_H-i-s') . '.pdf');
     }
 }
